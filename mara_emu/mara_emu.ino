@@ -15,11 +15,6 @@ C	Machine-Mode: C = CoffeeMode; V = Vapour/SteamMode
 char *output[] = {
 "0,0,0,0,0,0",                //machine is OFF
 "0,0,0,0,0,0",
-"0,0,0,0,0,0",
-"0,0,0,0,0,0",
-"0,0,0,0,0,0",
-"0,0,0,0,0,0",
-"0,0,0,0,0,0",
 "C1.09,050,140,043,1191,1,0",   //machine is switched ON
 "C1.09,050,140,042,1186,1,0",
 "C1.09,051,140,041,1181,1,0",
@@ -724,7 +719,7 @@ void loop() {
   int x;
 
   //Send for 5 secs the same data
-  for (x = 0; x < 10; x++ ) {
+  for (x = 0; x < 2; x++ ) {
     digitalWrite(ledPin, (i&1)? HIGH:LOW );
     maraSerial.println( output[i] );      
     delay(500);

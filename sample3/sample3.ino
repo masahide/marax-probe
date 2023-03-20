@@ -1,7 +1,3 @@
-#define D5 (14)
-#define D6 (12)
-#define D7 (13)
-
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
 #include <ESP8266WiFi.h>
@@ -76,22 +72,16 @@ void getMachineInput() {
 
 
 void detectChanges() {
-    int pumpInValue = 0;
-    if (receivedChars[25] == '0') {
-        pumpInValue = 0;
-    } else if (receivedChars[25] == '1') {
-        pumpInValue = 1;
-    }
 
-    digitalWrite(LED_BUILTIN, !pumpInValue);
-
-    if (!timerStarted && !pumpInValue) {
+    if (!timerStarted && receivedChars[25] == '1') {
         timerStartMillis = millis();
         timerStarted = true;
         displayOn = true;
+        digitalWrite(LED_BUILTIN, LOW);
         Serial.println("Start pump");
     }
-    if (timerStarted && pumpInValue) {
+    if (timerStarted && receivedChars[25] == '0') {
+        digitalWrite(LED_BUILTIN, HIGH);
         if (timerStopMillis == 0) {
             timerStopMillis = millis();
         }
@@ -134,7 +124,7 @@ String getTimer() {
 void updateDisplay() {
     display.clearDisplay();
     if (displayOn) {
-        if (timerStarted) {
+        if (false) {
             display.setTextSize(7);
             display.setCursor(25, 8);
             display.print(getTimer());
@@ -144,7 +134,12 @@ void updateDisplay() {
             // draw time seconds
             display.setTextSize(4);
             display.setCursor(display.width() / 2 - 1 + 17, 20);
+            if (timerStarted) 
+                display.setTextColor(BLACK, WHITE);
+            else
+                display.setTextColor(WHITE, BLACK);
             display.print(getTimer());
+            display.setTextColor(WHITE, BLACK);
             // draw machine state C/S
             if (receivedChars[0]) {
                 display.setTextSize(2);
@@ -178,6 +173,21 @@ void updateDisplay() {
                     display.drawRect(39, 1, 12, 12, SSD1306_WHITE);
                 }
             }
+            // draw temperature
+            if (receivedChars[14] && receivedChars[15] && receivedChars[16]) {
+                display.setTextSize(3);
+                display.setCursor(1, 20);
+                if (String(receivedChars[14]) != "0") {
+                    display.print(String(receivedChars[14]));
+                }
+                display.print(String(receivedChars[15]));
+                display.print(String(receivedChars[16]));
+                display.setTextSize(2);
+                display.print((char)247);
+                if (String(receivedChars[14]) == "0") {
+                    display.print("C");
+                }
+            }
             // draw steam temperature
             if (receivedChars[6] && receivedChars[7] && receivedChars[8]) {
                 display.setTextSize(2);
@@ -187,6 +197,7 @@ void updateDisplay() {
                 }
                 display.print(String(receivedChars[7]));
                 display.print(String(receivedChars[8]));
+                display.setTextSize(1);
                 display.print((char)247);
                 display.print("C");
             }
