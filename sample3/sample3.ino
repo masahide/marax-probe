@@ -70,7 +70,7 @@ void getMachineInput() {
 
 
 void detectChanges() {
-    static unsigned long timerDisplayOffMillis = 0;
+    static unsigned long timerDisplayOffMillis = millis();
     static unsigned long timerStopMillis = 0;
 
     if (!timerStarted && receivedChars[25] == '1') {
@@ -78,6 +78,7 @@ void detectChanges() {
         timerStarted = true;
         displayOn = true;
         digitalWrite(LED_BUILTIN, LOW);
+        timerDisplayOffMillis = millis();
         Serial.println("Start pump");
     }
     if (timerStarted && receivedChars[25] == '0') {

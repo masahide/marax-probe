@@ -708,7 +708,7 @@ char *output[] = {
 SoftwareSerial maraSerial(D1, D2); // RX (D1), TX (D2)
 
 const int ledPin = 2;
-
+const int lenOutput = sizeof(output) / sizeof(output[0])
 static int i = 0;
 
 void setup() {
