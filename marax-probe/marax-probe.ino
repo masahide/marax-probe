@@ -9,15 +9,15 @@
 
 
 #define pumpState (status.csv[25] == '1')
+#define backoffStart 500
 
 //
 const byte numChars = 64;
 
 struct Status {
   char csv[numChars];
-
-  int timeoutCnt;
-  int timer;
+  unsigned long timer;
+  unsigned long timeoutCnt;
   bool displayOn;
   bool changed;
 };
@@ -39,6 +39,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 Status status;
+Status prevStatus;
 
 
 void publish(Status status) {
@@ -98,7 +99,8 @@ void setup() {
   status.displayOn = true;
   status.timeoutCnt = 0;
   status.changed = false;
-  memset(status.csv, 0, numChars);
+  strcpy(status.csv, "_0.00,000,000,000,0000,0,0");
+  prevStatus = status;
   timerDisplayOffMillis = millis();
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -129,13 +131,12 @@ void loop() {
 
 
 void getMachineInput(Status &status) {
-  static bool timerStarted = false;
+  static bool prevPumpState = false;
   static unsigned long serialUpdateMillis = 0;
-  static unsigned long timerStopMillis = 0;
   static unsigned long timerStartMillis = 0;
+  static unsigned long backoff = backoffStart;
   static int prevTimerCount = 0;
   static byte ndx = 0;
-  static Status prevStatus;
   char endMarker1 = '\n';
   char endMarker2 = '\r';
   char rc;
@@ -148,40 +149,36 @@ void getMachineInput(Status &status) {
         continue;
       }
       status.csv[ndx] = rc;
-      ndx  = (ndx < numChars-1) ?  ndx+1 : numChars-1;
+      ndx = (ndx < numChars - 1) ? ndx + 1 : numChars - 1;
     } else {
       status.csv[ndx] = 0;
       ndx = 0;
 
       //Serial.println("csv: " + String(status.csv));
-      if (!timerStarted && pumpState) {
+      if (!prevPumpState && pumpState) {
         timerStartMillis = millis();
-        timerStarted = true;
         digitalWrite(LED_BUILTIN, LOW);
         //Serial.println("Start pump");
       }
-      if (timerStarted && !pumpState) {
+      if (prevPumpState && !pumpState) {
         digitalWrite(LED_BUILTIN, HIGH);
-        if (timerStopMillis == 0) {
-          timerStopMillis = millis();
-        }
-        if (millis() - timerStopMillis > 500) {
-          timerStarted = false;
-          timerStopMillis = 0;
-          //Serial.println("Stop pump");
-          prevTimerCount = (millis() - timerStartMillis) / 1000;
-        }
-      } else {
-        timerStopMillis = 0;
+        prevPumpState = false;
+        //Serial.println("Stop pump");
+        prevTimerCount = (millis() - timerStartMillis) / 1000;
       }
-      int timerCount = (timerStarted) ? ((millis() - timerStartMillis) / 1000) : prevTimerCount;
-      status.timer = (timerCount > 99) ? 99 : timerCount;
+      prevPumpState = pumpState;
       status.timeoutCnt = 0;
+      backoff = backoffStart;
       status.displayOn = true;
     }
   }
-  if (millis() - serialUpdateMillis > 6000) {
+  int timerCount = (pumpState) ? ((millis() - timerStartMillis) / 1000) : prevTimerCount;
+  status.timer = (timerCount > 99) ? 99 : timerCount;
+  if (millis() - serialUpdateMillis > backoff) {
     serialUpdateMillis = millis();
+    if (backoff < 6000) {
+      backoff = backoff << 1
+    }
     if (status.timeoutCnt < 99) {
       status.timeoutCnt++;
     }
