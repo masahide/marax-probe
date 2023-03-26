@@ -153,7 +153,7 @@ void getMachineInput(Status &status) {
       status.csv[ndx] = '\0';
       ndx = 0;
 
-      Serial.println("csv: " + String(status.csv));
+      //Serial.println("csv: " + String(status.csv));
       if (!timerStarted && pumpState) {
         timerStartMillis = millis();
         timerStarted = true;
@@ -181,30 +181,30 @@ void getMachineInput(Status &status) {
     }
   }
   if (millis() - serialUpdateMillis > 6000) {
-      serialUpdateMillis = millis();
-      if (status.timeoutCnt < 99) {
-          status.timeoutCnt++;
-      }
-      if (status.timeoutCnt > 10) {
-          prevTimerCount = 0;
-          status.displayOn = false;
-          Serial.println("Sleep");
-      }
-      memcpy(status.csv, prevStatus.csv, numChars);
-      if (status.timeoutCnt > 2) {
-        status.csv[0] = 'E';
-      }
-      Serial.println("Serial.read() timeoutCnt: "+String(status.timeoutCnt));
-      mySerial.write(0x11);
-  }
-    // 現在のStatusと前回のStatusを比較し、変更がある場合のみchangedフラグをtrueに設定
-    if (!status_equal(&status, &prevStatus)) {
-      status.changed = true;
-      prevStatus = status;
-      prevStatus.changed = false;
-    } else {
-      status.changed = false;
+    serialUpdateMillis = millis();
+    if (status.timeoutCnt < 99) {
+      status.timeoutCnt++;
     }
+    if (status.timeoutCnt > 10) {
+      prevTimerCount = 0;
+      status.displayOn = false;
+      Serial.println("Sleep");
+    }
+    memcpy(status.csv, prevStatus.csv, numChars);
+    if (status.timeoutCnt > 2) {
+      status.csv[0] = 'E';
+    }
+    Serial.println("Serial.read() timeoutCnt: " + String(status.timeoutCnt));
+    mySerial.write(0x11);
+  }
+  // 現在のStatusと前回のStatusを比較し、変更がある場合のみchangedフラグをtrueに設定
+  if (!status_equal(&status, &prevStatus)) {
+    status.changed = true;
+    prevStatus = status;
+    prevStatus.changed = false;
+  } else {
+    status.changed = false;
+  }
 }
 
 
