@@ -11,7 +11,7 @@
 #define pumpState (status.csv[25] == '1')
 
 //
-const byte numChars = 32;
+const byte numChars = 64;
 
 struct Status {
   char csv[numChars];
@@ -43,10 +43,9 @@ Status status;
 
 void publish(Status status) {
   char buf[60];
-  //sprintf(buf, "%c,%d,%d,%d,%d,%d,%d,%d,%d", status.machineState, status.heatingState, status.pumpState, status.heatingMode, status.currentTemp, status.steamTemp, status.targetTemp, status.timer);
   sprintf(buf, "%s,%d,%d", status.csv, status.timer, status.timeoutCnt);
   client.publish(topic, buf);
-  Serial.println("published: " + String(buf));
+  //Serial.println("published: " + String(buf));
 }
 
 void setup_wifi() {
@@ -137,20 +136,21 @@ void getMachineInput(Status &status) {
   static int prevTimerCount = 0;
   static byte ndx = 0;
   static Status prevStatus;
-  char endMarker = '\n';
+  char endMarker1 = '\n';
+  char endMarker2 = '\r';
   char rc;
   while (mySerial.available()) {
     serialUpdateMillis = millis();
     rc = mySerial.read();
 
-    if (rc != endMarker) {
-      status.csv[ndx] = rc;
-      ndx++;
-      if (ndx >= numChars) {
-        ndx = numChars - 1;
+    if (rc != endMarker1) {
+      if (rc == endMarker2) {
+        continue;
       }
+      status.csv[ndx] = rc;
+      ndx  = (ndx < numChars-1) ?  ndx+1 : numChars-1;
     } else {
-      status.csv[ndx] = '\0';
+      status.csv[ndx] = 0;
       ndx = 0;
 
       //Serial.println("csv: " + String(status.csv));
@@ -158,7 +158,7 @@ void getMachineInput(Status &status) {
         timerStartMillis = millis();
         timerStarted = true;
         digitalWrite(LED_BUILTIN, LOW);
-        Serial.println("Start pump");
+        //Serial.println("Start pump");
       }
       if (timerStarted && !pumpState) {
         digitalWrite(LED_BUILTIN, HIGH);
@@ -168,7 +168,7 @@ void getMachineInput(Status &status) {
         if (millis() - timerStopMillis > 500) {
           timerStarted = false;
           timerStopMillis = 0;
-          Serial.println("Stop pump");
+          //Serial.println("Stop pump");
           prevTimerCount = (millis() - timerStartMillis) / 1000;
         }
       } else {
@@ -188,13 +188,13 @@ void getMachineInput(Status &status) {
     if (status.timeoutCnt > 10) {
       prevTimerCount = 0;
       status.displayOn = false;
-      Serial.println("Sleep");
+      //Serial.println("Sleep");
     }
     memcpy(status.csv, prevStatus.csv, numChars);
     if (status.timeoutCnt > 2) {
       status.csv[0] = 'E';
     }
-    Serial.println("Serial.read() timeoutCnt: " + String(status.timeoutCnt));
+    //Serial.println("Serial.read() timeoutCnt: " + String(status.timeoutCnt));
     mySerial.write(0x11);
   }
   // 現在のStatusと前回のStatusを比較し、変更がある場合のみchangedフラグをtrueに設定
