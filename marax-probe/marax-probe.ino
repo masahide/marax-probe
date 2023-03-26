@@ -99,7 +99,7 @@ void setup() {
   status.displayOn = true;
   status.timeoutCnt = 0;
   status.changed = false;
-  strcpy(status.csv, "_0.00,000,000,000,0000,0,0");
+  strcpy(status.csv, "Z0.00,000,000,000,0000,0,0");
   prevStatus = status;
   timerDisplayOffMillis = millis();
 
@@ -130,6 +130,12 @@ void loop() {
 }
 
 
+bool validate(char* csv){
+    return csv[0] >= 'A' && csv[0] <= 'Z'
+    && csv[5] == ','  && csv[9] == ',' && csv[13] == ',' && csv[17] == ','
+    && csv[22] == ',' && csv[24] == ',';
+}
+
 void getMachineInput(Status &status) {
   static bool prevPumpState = false;
   static unsigned long serialUpdateMillis = 0;
@@ -153,7 +159,9 @@ void getMachineInput(Status &status) {
     } else {
       status.csv[ndx] = 0;
       ndx = 0;
-
+      if (!validate(status.csv)) {
+        memcpy(status.csv, prevStatus.csv, numChars);
+      }
       //Serial.println("csv: " + String(status.csv));
       if (!prevPumpState && pumpState) {
         timerStartMillis = millis();
@@ -177,7 +185,7 @@ void getMachineInput(Status &status) {
   if (millis() - serialUpdateMillis > backoff) {
     serialUpdateMillis = millis();
     if (backoff < 6000) {
-      backoff = backoff << 1
+      backoff = backoff << 1;
     }
     if (status.timeoutCnt < 99) {
       status.timeoutCnt++;
