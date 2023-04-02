@@ -9,10 +9,13 @@
 
 
 #define pumpState (status.csv[25] == '1')
-#define backoffStart 500
+#define backoffStart 1000
+#define csvInitData "Z0.00,000,000,000,0000,0,0"
+#define endMarker '\n'
 
 //
 const byte numChars = 64;
+
 
 struct Status {
   char csv[numChars];
@@ -22,14 +25,12 @@ struct Status {
   bool changed;
 };
 
-unsigned long timerDisplayOffMillis = 0;
 
 bool status_equal(struct Status *a, struct Status *b) {
   return strcmp(a->csv, b->csv) == 0
          && a->timer == b->timer
          && a->displayOn == b->displayOn
          && a->timeoutCnt == b->timeoutCnt;
-  // return a->machineState == b->machineState && a->heatingState == b->heatingState && a->pumpState == b->pumpState && a->heatingMode == b->heatingMode && a->currentTemp == b->currentTemp && a->targetTemp  == b->targetTemp && a->steamTemp == b->steamTemp && a->timer == b->timer;
 }
 
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
@@ -99,9 +100,8 @@ void setup() {
   status.displayOn = true;
   status.timeoutCnt = 0;
   status.changed = false;
-  strcpy(status.csv, "Z0.00,000,000,000,0000,0,0");
+  strcpy(status.csv, csvInitData);
   prevStatus = status;
-  timerDisplayOffMillis = millis();
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -130,11 +130,22 @@ void loop() {
 }
 
 
-bool validate(char* csv){
-    return csv[0] >= 'A' && csv[0] <= 'Z'
-    && csv[5] == ','  && csv[9] == ',' && csv[13] == ',' && csv[17] == ','
-    && csv[22] == ',' && csv[24] == ',';
+bool isNum(char *str, int size) {
+  for (int i = 0; i < size; i++) {
+    if (str[i] < '0' || str[i] > '9') {
+      return false;
+    }
+  }
+  return true;
 }
+
+bool validate(char *csv) {
+  return strlen(csv) == 26 && csv[0] >= 'A' && csv[0] <= 'Z'
+         && csv[5] == ',' && csv[9] == ',' && csv[13] == ',' && csv[17] == ','
+         && csv[22] == ',' && csv[24] == ','
+         && isNum(csv + 6, 3) && isNum(csv + 10, 3) && isNum(csv + 14, 3) && isNum(csv + 18, 4);
+}
+
 
 void getMachineInput(Status &status) {
   static bool prevPumpState = false;
@@ -142,49 +153,45 @@ void getMachineInput(Status &status) {
   static unsigned long timerStartMillis = 0;
   static unsigned long backoff = backoffStart;
   static int prevTimerCount = 0;
-  static byte ndx = 0;
-  char endMarker1 = '\n';
-  char endMarker2 = '\r';
-  char rc;
-  while (mySerial.available()) {
-    serialUpdateMillis = millis();
-    rc = mySerial.read();
-
-    if (rc != endMarker1) {
-      if (rc == endMarker2) {
-        continue;
-      }
-      status.csv[ndx] = rc;
-      ndx = (ndx < numChars - 1) ? ndx + 1 : numChars - 1;
-    } else {
-      status.csv[ndx] = 0;
-      ndx = 0;
-      if (!validate(status.csv)) {
-        memcpy(status.csv, prevStatus.csv, numChars);
-      }
-      //Serial.println("csv: " + String(status.csv));
-      if (!prevPumpState && pumpState) {
-        timerStartMillis = millis();
-        digitalWrite(LED_BUILTIN, LOW);
-        //Serial.println("Start pump");
-      }
-      if (prevPumpState && !pumpState) {
-        digitalWrite(LED_BUILTIN, HIGH);
-        prevPumpState = false;
-        //Serial.println("Stop pump");
-        prevTimerCount = (millis() - timerStartMillis) / 1000;
-      }
-      prevPumpState = pumpState;
-      status.timeoutCnt = 0;
-      backoff = backoffStart;
-      status.displayOn = true;
+  int rlen = 0;
+  if (mySerial.available() > 0) {
+    rlen = mySerial.readBytesUntil(endMarker, status.csv, numChars);
+    if (rlen > 0) {
+      status.csv[rlen-1] = 0;
     }
+  }
+  if (rlen > 0 && validate(status.csv)) {
+    // ok
+    //Serial.println("ok csv: " + String(status.csv));
+    serialUpdateMillis = millis();
+    if (!prevPumpState && pumpState) {
+      timerStartMillis = millis();
+      digitalWrite(LED_BUILTIN, LOW);
+      //Serial.println("Start pump");
+    }
+    if (prevPumpState && !pumpState) {
+      digitalWrite(LED_BUILTIN, HIGH);
+      prevPumpState = false;
+      //Serial.println("Stop pump");
+      prevTimerCount = (millis() - timerStartMillis) / 1000;
+    }
+    prevPumpState = pumpState;
+    status.timeoutCnt = 0;
+    backoff = backoffStart;
+    status.displayOn = true;
+  } else {
+    // ng
+    if (rlen){
+      Serial.println( "ng csv: " + String(status.csv) + "; len csv: " + String(strlen(status.csv)));
+    }
+    memcpy(status.csv, prevStatus.csv, numChars);
   }
   int timerCount = (pumpState) ? ((millis() - timerStartMillis) / 1000) : prevTimerCount;
   status.timer = (timerCount > 99) ? 99 : timerCount;
+
   if (millis() - serialUpdateMillis > backoff) {
     serialUpdateMillis = millis();
-    if (backoff < 6000) {
+    if (backoff < backoffStart*20) {
       backoff = backoff << 1;
     }
     if (status.timeoutCnt < 99) {
@@ -195,11 +202,10 @@ void getMachineInput(Status &status) {
       status.displayOn = false;
       //Serial.println("Sleep");
     }
-    memcpy(status.csv, prevStatus.csv, numChars);
     if (status.timeoutCnt > 2) {
       status.csv[0] = 'E';
     }
-    //Serial.println("Serial.read() timeoutCnt: " + String(status.timeoutCnt));
+    Serial.println("Serial.read() timeoutCnt: " + String(status.timeoutCnt));
     mySerial.write(0x11);
   }
   // 現在のStatusと前回のStatusを比較し、変更がある場合のみchangedフラグをtrueに設定
